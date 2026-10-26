@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
 
-const ADMIN_EMAIL = "sakshamagrawal1962007@gmail.com";
+const ADMIN_EMAIL = "rensakusa@gmail.com";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
