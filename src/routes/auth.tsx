@@ -1,23 +1,24 @@
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
 
-const searchSchema = z.object({ redirect: z.string().optional() });
+const ADMIN_EMAIL = "sakshamagrawal1962007@gmail.com";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (s) => searchSchema.parse(s),
   head: () => ({
     meta: [
       { title: "Admin Sign In | Rakesh Shoe Store" },
-      { name: "description", content: "Sign in to manage products at Rakesh Shoe Store." },
+      {
+        name: "description",
+        content: "Sign in to manage products at Rakesh Shoe Store.",
+      },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -26,38 +27,73 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const { redirect } = useSearch({ from: "/auth" });
-  const { user, loading } = useAuth();
-  const [email, setEmail] = useState("");
+  const { user, isAdmin, loading } = useAuth();
+
+  const [email, setEmail] = useState(ADMIN_EMAIL);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) {
-      navigate({ to: (redirect as "/admin") ?? "/admin" });
+    if (!loading && user && isAdmin) {
+      navigate({ to: "/admin", replace: true });
     }
-  }, [user, loading, redirect, navigate]);
+  }, [user, isAdmin, loading, navigate]);
 
-  const signIn = async (e: React.FormEvent) => {
+  const signIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Welcome back!");
-  };
 
-  const signUp = async (e: React.FormEvent) => {
-    e.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (normalizedEmail !== ADMIN_EMAIL) {
+      toast.error("This email is not authorized for admin login.");
+      return;
+    }
+
+    if (!password) {
+      toast.error("Please enter your password.");
+      return;
+    }
+
     setBusy(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/admin` },
-    });
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Account created — you're signed in.");
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (error || !data.user) {
+        toast.error(error?.message ?? "Login failed.");
+        return;
+      }
+
+      // Verify the admin role from Supabase.
+      const { data: role, error: roleError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+
+      if (
+        roleError ||
+        !role ||
+        data.user.email?.toLowerCase() !== ADMIN_EMAIL
+      ) {
+        await supabase.auth.signOut();
+        toast.error(
+          "Admin access is not enabled for this account. Please check the admin role."
+        );
+        return;
+      }
+
+      toast.success("Login successful! Welcome to Admin Dashboard.");
+      navigate({ to: "/admin", replace: true });
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -66,52 +102,50 @@ function AuthPage() {
         <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-gold">
           <ShieldCheck className="h-6 w-6" />
         </div>
-        <h1 className="mt-4 font-display text-3xl font-bold">Admin Access</h1>
+
+        <h1 className="mt-4 font-display text-3xl font-bold">
+          Admin Access
+        </h1>
+
         <p className="mt-2 text-sm text-muted-foreground">
           Sign in to manage products, clearance deals, and stock.
         </p>
       </div>
 
       <div className="glass-card rounded-2xl p-6">
-        <Tabs defaultValue="signin">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="signin">Sign In</TabsTrigger>
-            <TabsTrigger value="signup">Create Account</TabsTrigger>
-          </TabsList>
-          <TabsContent value="signin" className="mt-4">
-            <form onSubmit={signIn} className="space-y-4">
-              <div>
-                <Label htmlFor="e1">Email</Label>
-                <Input id="e1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </div>
-              <div>
-                <Label htmlFor="p1">Password</Label>
-                <Input id="p1" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-              </div>
-              <Button type="submit" disabled={busy} className="btn-royal w-full">
-                {busy ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
-          </TabsContent>
-          <TabsContent value="signup" className="mt-4">
-            <form onSubmit={signUp} className="space-y-4">
-              <div>
-                <Label htmlFor="e2">Email</Label>
-                <Input id="e2" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </div>
-              <div>
-                <Label htmlFor="p2">Password</Label>
-                <Input id="p2" type="password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} required />
-              </div>
-              <Button type="submit" disabled={busy} className="btn-royal w-full">
-                {busy ? "Creating..." : "Create Account"}
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                Only the shop owner email gets admin privileges automatically.
-              </p>
-            </form>
-          </TabsContent>
-        </Tabs>
+        <form onSubmit={signIn} className="space-y-4">
+          <div>
+            <Label htmlFor="admin-email">Admin Email</Label>
+            <Input
+              id="admin-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              required
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="admin-password">Password</Label>
+            <Input
+              id="admin-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </div>
+
+          <Button
+            type="submit"
+            disabled={busy || loading}
+            className="btn-royal w-full"
+          >
+            {busy ? "Signing in..." : "Sign In"}
+          </Button>
+        </form>
       </div>
     </div>
   );
