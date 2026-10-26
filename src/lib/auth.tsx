@@ -10,7 +10,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-const ADMIN_EMAIL = "sakshamagrawal1962007@gmail.com";
+const ADMIN_EMAIL = "rensakusa@gmail.com";
 
 interface AuthCtx {
   user: User | null;
